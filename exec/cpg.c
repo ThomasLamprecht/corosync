@@ -531,6 +531,12 @@ static void cpg_sync_init (
 
 	my_sync_state = CPGSYNC_DOWNLIST;
 
+	/*
+	 * Drop joinlist messages left over from an aborted sync round. Those
+	 * of this round can only arrive after this init ran on all members.
+	 */
+	joinlist_messages_delete ();
+
 	memcpy (my_member_list, member_list, member_list_entries *
 		sizeof (unsigned int));
 	my_member_list_entries = member_list_entries;
