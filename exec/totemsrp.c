@@ -343,6 +343,8 @@ struct totemsrp_instance {
 
 	int my_aru_count;
 
+	uint64_t my_aru_count_start;
+
 	int my_merge_detect_timeout_outstanding;
 
 	unsigned int my_last_aru;
@@ -909,8 +911,9 @@ int totemsrp_initialize (
 
 		totem_config->merge_timeout);
 	log_printf (instance->totemsrp_log_level_debug,
-		"downcheck (%d ms) fail to recv const (%d msgs)",
-		totem_config->downcheck_timeout, totem_config->fail_to_recv_const);
+		"downcheck (%d ms) fail to recv const (%d msgs) fail to recv timeout (%d ms)",
+		totem_config->downcheck_timeout, totem_config->fail_to_recv_const,
+		totem_config->fail_to_recv_timeout);
 	log_printf (instance->totemsrp_log_level_debug,
 		"seqno unchanged const (%d rotations) Maximum network MTU %d", totem_config->seqno_unchanged_const, totem_config->net_mtu);
 
@@ -3870,6 +3873,24 @@ static int check_token_hold_cancel_sanity(
  * Message Handlers
  */
 
+/*
+ * The rotation based fail_to_recv_const alone can take very long to trigger when the token is
+ * held between rotations, for example while only retransmissions are outstanding. Bound the time
+ * the lowest ARU may stay unchanged as well.
+ */
+static int fail_to_recv_timeout_expired (struct totemsrp_instance *instance)
+{
+	uint64_t timeout_ns;
+
+	if (instance->totem_config->fail_to_recv_timeout == 0 || instance->my_aru_count == 0) {
+		return (0);
+	}
+
+	timeout_ns = (uint64_t)instance->totem_config->fail_to_recv_timeout * QB_TIME_NS_IN_MSEC;
+
+	return (qb_util_nano_current_get () - instance->my_aru_count_start > timeout_ns);
+}
+
 #ifdef GIVEINFO
 uint64_t tv_old;
 #endif
@@ -4063,6 +4084,9 @@ printf ("token seq %d\n", token->seq);
 			}
 		}
 		if (token->aru == last_aru && token->aru_addr != 0) {
+			if (instance->my_aru_count == 0) {
+				instance->my_aru_count_start = qb_util_nano_current_get ();
+			}
 			instance->my_aru_count += 1;
 		} else {
 			instance->my_aru_count = 0;
@@ -4073,11 +4097,15 @@ printf ("token seq %d\n", token->seq);
 		 * detect failure of one node (based on aru_count) and my_id IS NEVER added
 		 * to failed list (so node never mark itself as failed)
 		 */
-		if (instance->my_aru_count > instance->totem_config->fail_to_recv_const &&
-		    token->aru_addr == instance->my_id.nodeid) {
+		if (token->aru_addr == instance->my_id.nodeid &&
+		    (instance->my_aru_count > instance->totem_config->fail_to_recv_const ||
+		     fail_to_recv_timeout_expired (instance))) {
 
 			log_printf (instance->totemsrp_log_level_error,
-				"FAILED TO RECEIVE");
+				"FAILED TO RECEIVE (%d rotations, %"PRIu64" ms without progress)",
+				instance->my_aru_count,
+				(uint64_t)((qb_util_nano_current_get () - instance->my_aru_count_start) /
+				QB_TIME_NS_IN_MSEC));
 
 			instance->failed_to_recv = 1;
 

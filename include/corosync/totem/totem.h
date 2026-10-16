@@ -207,6 +207,8 @@ struct totem_config {
 
 	unsigned int fail_to_recv_const;
 
+	unsigned int fail_to_recv_timeout;
+
 	unsigned int seqno_unchanged_const;
 
 	char link_mode[TOTEM_LINK_MODE_BYTES];

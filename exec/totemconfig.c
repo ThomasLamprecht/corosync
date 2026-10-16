@@ -73,6 +73,7 @@
 #define MERGE_TIMEOUT				200
 #define DOWNCHECK_TIMEOUT			1000
 #define FAIL_TO_RECV_CONST			2500
+#define FAIL_TO_RECV_TIMEOUT_TOKENS		10
 #define	SEQNO_UNCHANGED_CONST			30
 #define MINIMUM_TIMEOUT				(int)(1000/HZ)*3
 #define MINIMUM_TIMEOUT_HOLD			(int)(MINIMUM_TIMEOUT * 0.8 - (1000/HZ))
@@ -124,6 +125,8 @@ static void *totem_get_param_by_name(struct totem_config *totem_config, const ch
 		return &totem_config->downcheck_timeout;
 	if (strcmp(param_name, "totem.fail_recv_const") == 0)
 		return &totem_config->fail_to_recv_const;
+	if (strcmp(param_name, "totem.fail_recv_timeout") == 0)
+		return &totem_config->fail_to_recv_timeout;
 	if (strcmp(param_name, "totem.seqno_unchanged_const") == 0)
 		return &totem_config->seqno_unchanged_const;
 	if (strcmp(param_name, "totem.heartbeat_failures_allowed") == 0)
@@ -311,6 +314,7 @@ static void totem_volatile_config_set_boolean_value (struct totem_config *totem_
 void totem_volatile_config_read (struct totem_config *totem_config, icmap_map_t temp_map, const char *deleted_key)
 {
 	uint32_t u32;
+	uint64_t u64;
 
 	totem_volatile_config_set_uint32_value(totem_config, temp_map, "totem.token_retransmits_before_loss_const", deleted_key,
 	    TOKEN_RETRANSMITS_BEFORE_LOSS_CONST, 0);
@@ -356,6 +360,13 @@ void totem_volatile_config_read (struct totem_config *totem_config, icmap_map_t 
 	totem_volatile_config_set_uint32_value(totem_config, temp_map, "totem.downcheck", deleted_key, DOWNCHECK_TIMEOUT, 0);
 
 	totem_volatile_config_set_uint32_value(totem_config, temp_map, "totem.fail_recv_const", deleted_key, FAIL_TO_RECV_CONST, 0);
+
+	/*
+	 * Saturate instead of wrapping around for absurdly large token timeouts
+	 */
+	u64 = (uint64_t)FAIL_TO_RECV_TIMEOUT_TOKENS * totem_config->token_timeout;
+	totem_volatile_config_set_uint32_value(totem_config, temp_map, "totem.fail_recv_timeout", deleted_key,
+	    u64 > UINT32_MAX ? UINT32_MAX : u64, 1);
 
 	totem_volatile_config_set_uint32_value(totem_config, temp_map, "totem.seqno_unchanged_const", deleted_key,
 	    SEQNO_UNCHANGED_CONST, 0);
@@ -458,6 +469,14 @@ int totem_volatile_config_validate (
 		snprintf (local_error_reason, sizeof(local_error_reason),
 			"The merge timeout parameter (%d ms) may not be less than (%d ms).",
 			totem_config->merge_timeout, MINIMUM_TIMEOUT);
+		goto parse_error;
+	}
+
+	if (totem_config->fail_to_recv_timeout != 0 &&
+	    totem_config->fail_to_recv_timeout < totem_config->token_timeout) {
+		snprintf (local_error_reason, sizeof(local_error_reason),
+			"The fail_recv_timeout parameter (%d ms) may not be less than the token timeout (%d ms).",
+			totem_config->fail_to_recv_timeout, totem_config->token_timeout);
 		goto parse_error;
 	}
 
@@ -2395,8 +2414,9 @@ static void debug_dump_totem_config(const struct totem_config *totem_config)
 	log_printf(LOGSYS_LEVEL_DEBUG, "join (%d ms) send_join (%d ms) consensus (%d ms) merge (%d ms)",
 	    totem_config->join_timeout, totem_config->send_join_timeout, totem_config->consensus_timeout,
 	    totem_config->merge_timeout);
-	log_printf(LOGSYS_LEVEL_DEBUG, "downcheck (%d ms) fail to recv const (%d msgs)",
-	    totem_config->downcheck_timeout, totem_config->fail_to_recv_const);
+	log_printf(LOGSYS_LEVEL_DEBUG, "downcheck (%d ms) fail to recv const (%d msgs) fail to recv timeout (%d ms)",
+	    totem_config->downcheck_timeout, totem_config->fail_to_recv_const,
+	    totem_config->fail_to_recv_timeout);
 	log_printf(LOGSYS_LEVEL_DEBUG,
 	    "seqno unchanged const (%d rotations) Maximum network MTU %d",
 	    totem_config->seqno_unchanged_const, totem_config->net_mtu);

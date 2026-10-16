@@ -813,6 +813,7 @@ static int main_config_parser_cb(const char *path,
 			    (strcmp(path, "totem.merge") == 0) ||
 			    (strcmp(path, "totem.downcheck") == 0) ||
 			    (strcmp(path, "totem.fail_recv_const") == 0) ||
+			    (strcmp(path, "totem.fail_recv_timeout") == 0) ||
 			    (strcmp(path, "totem.seqno_unchanged_const") == 0) ||
 			    (strcmp(path, "totem.heartbeat_failures_allowed") == 0) ||
 			    (strcmp(path, "totem.max_network_delay") == 0) ||

@@ -556,6 +556,26 @@ configuration is formed.
 The default is 2500 failures to receive a message.
 
 .TP
+fail_recv_timeout
+This timeout specifies in milliseconds how long the token may keep rotating
+without the lowest received sequence number of the ring advancing before the
+processor that lacks messages leaves the configuration, so that the other
+processors form a new configuration without it.
+It applies in addition to
+.B fail_recv_const
+and bounds the time a processor that repeatedly fails to receive retransmitted
+messages can stall the ring, even when the token is held between rotations.
+The timeout is checked when the token is processed. It bounds the detection
+only, not the time until services are synchronized again, nor how often the
+processor rejoins and fails again if it still cannot receive.
+A nonzero value must not be less than the token timeout. Setting it to 0
+disables the time limit.
+
+The default is 10 times the token timeout, including the
+.B token_coefficient
+adjustment.
+
+.TP
 seqno_unchanged_const
 This constant specifies how many rotations of the token without any multicast
 traffic should occur before the hold timer is started.
