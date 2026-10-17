@@ -457,8 +457,10 @@ the corosync community.
 The minimum is 30 milliseconds. If not set and error occur, make sure
 token / (token_retransmits_before_loss_const + 0.2) is more than 30.
 
-The default is 238 milliseconds for two nodes cluster. Three or more nodes reference
-.B token_coefficient.
+The default is token / (token_retransmits_before_loss_const + 0.2), which is
+714 milliseconds with the default token timeout of a two node cluster. For three
+or more nodes, the token timeout is first adjusted by
+.BR token_coefficient .
 
 .TP
 knet_compression_model
@@ -487,7 +489,10 @@ This timeout specifies in milliseconds how long the token should be held by
 the representative when the protocol is under low utilization.   It is not
 recommended to alter this value without guidance from the corosync community.
 
-The default is 180 milliseconds.
+The default is 0.8 times
+.B token_retransmit
+minus 10 milliseconds, which is 561 milliseconds with the default token timeout
+of a two node cluster.
 
 .TP
 token_retransmits_before_loss_const
